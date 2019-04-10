@@ -165,9 +165,9 @@ func assignSegments(f *elf.File) ([]segment, error) {
 	var segments []segment
 	for i, p := range f.Progs {
 		switch p.Type {
-		case elf.PT_NULL, ptGNUEHFrame:
-			// NULL means discard, and we explicitly discard exception handling
-			// information.
+		case elf.PT_NULL, elf.PT_NOTE, ptGNUEHFrame:
+			// NULL means discard, we don't want to keep comments, and we
+			// explicitly discard exception handling information.
 		case elf.PT_LOAD:
 			seg, err := readLoadSegment(i, p)
 			if err != nil {

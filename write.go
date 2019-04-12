@@ -128,6 +128,7 @@ func (d *fixupdata) write(size uint32, fixups []fixup) []uint32 {
 		if pos == idx {
 			idxs[pi] = 0
 		}
+		idxs[pi] = uint32(len(pages) / 4)
 		pfixups := assigned[pos:idx]
 		pos = idx
 		base := int32(pi << pageBits)
@@ -138,7 +139,6 @@ func (d *fixupdata) write(size uint32, fixups []fixup) []uint32 {
 		var roff [4]byte
 		binary.LittleEndian.PutUint32(roff[:], uint32(len(records)))
 		pages = append(pages, roff[:]...)
-		idxs[pi] = uint32(len(records) / 4)
 	}
 	d.pages = pages
 	d.records = records

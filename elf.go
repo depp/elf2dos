@@ -189,15 +189,15 @@ func resolveSymbols(f *elf.File, segs []segment) ([]symbol, error) {
 func addRelocation(rel elf.Rel32, segs []segment, syms []symbol) error {
 	// Find segment containing the relocation source (where the fixup applies).
 	var seg segment
-	var haveSeg bool
-	for _, s := range segs {
+	var srcObj int32
+	for i, s := range segs {
 		if s.contains(addrRange{rel.Off, 4}) {
 			seg = s
-			haveSeg = true
+			srcObj = int32(i + 1)
 			break
 		}
 	}
-	if !haveSeg {
+	if srcObj == 0 {
 		// The relocation does not exist in any segment, which may mean that we
 		// have discarded the segment containing it. This can happen to EH frame
 		// data.
@@ -224,6 +224,11 @@ func addRelocation(rel elf.Rel32, segs []segment, syms []symbol) error {
 		srcType = srcOffset32
 		fixOff = sym.off + int32(val-sym.addr)
 	case elf.R_386_PC32:
+		if sym.obj == srcObj {
+			// Note that: srcOff+int32(val)+4 == fixOff
+			// Relative fixups within an object are not necessary.
+			return nil
+		}
 		srcType = srcRelative32
 		fixOff = sym.off + int32(val+rel.Off+4-sym.addr)
 	default:

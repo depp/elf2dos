@@ -39,23 +39,11 @@ func wrapErrorf(e error, f string, a ...interface{}) error {
 }
 
 func wrapErrorSection(e error, i int, s *elf.Section) error {
-	if _, ok := e.(*wrappedError); ok {
-		return e
-	}
-	return &wrappedError{
-		location: fmt.Sprintf("section %d %q", i, s.Name),
-		inner:    e,
-	}
+	return wrapErrorf(e, "section %d %q", i, s.Name)
 }
 
 func wrapErrorSegment(e error, i int) error {
-	if _, ok := e.(*wrappedError); ok {
-		return e
-	}
-	return &wrappedError{
-		location: fmt.Sprintf("segment %d", i),
-		inner:    e,
-	}
+	return wrapErrorf(e, "segment %d", i)
 }
 
 // =================================================================================================
@@ -198,6 +186,60 @@ func resolveSymbols(f *elf.File, segs []segment) ([]symbol, error) {
 	return osyms, nil
 }
 
+func addRelocation(rel elf.Rel32, segs []segment, syms []symbol) error {
+	// Find segment containing the relocation source (where the fixup applies).
+	var seg segment
+	var haveSeg bool
+	for _, s := range segs {
+		if s.contains(addrRange{rel.Off, 4}) {
+			seg = s
+			haveSeg = true
+			break
+		}
+	}
+	if !haveSeg {
+		// The relocation does not exist in any segment, which may mean that we
+		// have discarded the segment containing it. This can happen to EH frame
+		// data.
+		return nil
+	}
+	// Get the relocation target, which is a symbol.
+	rsym := rel.Info >> 8
+	if rsym == 0 || rsym > uint32(len(syms)) {
+		return fmt.Errorf("symbol reference %d out of bounds", rsym)
+	}
+	sym := syms[rsym-1]
+	if sym.obj == 0 {
+		return fmt.Errorf("unresolved symbol %q (symbol %d)", sym.name, rsym)
+	}
+	// Get the current value stored in the relocation. Note that the value here
+	// is after the relocations are applied by the ELF linker.
+	obj := seg.object
+	srcOff := int32(rel.Off - seg.addr)
+	val := binary.LittleEndian.Uint32(obj.data[srcOff:])
+	var srcType srcType
+	var fixOff int32
+	switch rtype := elf.R_386(rel.Info & 0xff); rtype {
+	case elf.R_386_32:
+		srcType = srcOffset32
+		fixOff = sym.off + int32(val-sym.addr)
+	case elf.R_386_PC32:
+		srcType = srcRelative32
+		fixOff = sym.off + int32(val+rel.Off+4-sym.addr)
+	default:
+		return fmt.Errorf("unsupported relocation type %s", rtype)
+	}
+	obj.fixups = append(obj.fixups, fixup{
+		srcType: srcType,
+		src:     srcOff,
+		target: ref{
+			obj: sym.obj,
+			off: fixOff,
+		},
+	})
+	return nil
+}
+
 // readRelocationSection reads a single relocation section and adds its fixups
 // to the objects.
 func readRelocationSection(s *elf.Section, segs []segment, syms []symbol) error {
@@ -214,47 +256,9 @@ func readRelocationSection(s *elf.Section, segs []segment, syms []symbol) error 
 		for r.Len() > 0 {
 			var rel elf.Rel32
 			binary.Read(r, binary.LittleEndian, &rel)
-			srcOff := rel.Off
-			var srcType srcType
-			switch rtype := elf.R_386(rel.Info & 0xff); rtype {
-			case elf.R_386_32:
-				srcType = srcOffset32
-			case elf.R_386_PC32:
-				srcType = srcRelative32
-			default:
-				return fmt.Errorf("unsupported relocation type %s", rtype)
+			if err := addRelocation(rel, segs, syms); err != nil {
+				return wrapErrorf(err, "relocation at 0x%x", rel.Off)
 			}
-			var sseg segment
-			var hasSSeg bool
-			for _, ss := range segs {
-				if ss.contains(addrRange{srcOff, 4}) {
-					sseg = ss
-					hasSSeg = true
-					break
-				}
-			}
-			if !hasSSeg {
-				continue
-			}
-			val := binary.LittleEndian.Uint32(sseg.object.data[srcOff-sseg.addr:])
-			rsym := rel.Info >> 8
-			if rsym == 0 || rsym > uint32(len(syms)) {
-				return fmt.Errorf("symbol reference %d out of bounds", rsym)
-			}
-			sym := syms[rsym-1]
-			if sym.obj == 0 {
-				return fmt.Errorf("relocation at 0x%x has unresolved symbol %q",
-					srcOff, sym.name)
-			}
-			obj := sseg.object
-			obj.fixups = append(obj.fixups, fixup{
-				srcType: srcType,
-				src:     int32(srcOff - sseg.addr),
-				target: ref{
-					obj: sym.obj,
-					off: sym.off + int32(val-sym.addr),
-				},
-			})
 		}
 		return nil
 	default:

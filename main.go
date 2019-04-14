@@ -28,7 +28,7 @@ func mainE() error {
 		return err
 	}
 	defer fp.Close()
-	if err := prog.writeTo(fp); err != nil {
+	if _, err := prog.WriteTo(fp); err != nil {
 		return err
 	}
 	return fp.Close() // Double-close is OK

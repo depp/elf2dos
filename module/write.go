@@ -1,4 +1,4 @@
-package main
+package module
 
 import (
 	"encoding/binary"
@@ -23,11 +23,11 @@ type objdata struct {
 	page   []byte
 }
 
-func (d *objdata) write(obj *object, fixup []uint32, first, count uint32) {
+func (d *objdata) write(obj *Object, fixup []uint32, first, count uint32) {
 	var od [4 * 6]byte
-	binary.LittleEndian.PutUint32(od[:], obj.size)
-	binary.LittleEndian.PutUint32(od[4:], obj.addr)
-	binary.LittleEndian.PutUint32(od[8:], uint32(obj.flags))
+	binary.LittleEndian.PutUint32(od[:], obj.Size)
+	binary.LittleEndian.PutUint32(od[4:], obj.Addr)
+	binary.LittleEndian.PutUint32(od[8:], uint32(obj.Flags))
 	if len(fixup) != 0 {
 		binary.LittleEndian.PutUint32(od[12:], uint32(len(d.page)/4)+1)
 		binary.LittleEndian.PutUint32(od[16:], uint32(len(fixup)))
@@ -40,19 +40,19 @@ func (d *objdata) write(obj *object, fixup []uint32, first, count uint32) {
 
 // =================================================================================================
 
-func appendFixup(f fixup, data []byte) []byte {
+func appendFixup(f Fixup, data []byte) []byte {
 	var d [9]byte
-	d[0] = byte(f.srcType)
+	d[0] = byte(f.SrcType)
 	var flags byte
-	binary.LittleEndian.PutUint16(d[2:], uint16(f.src))
-	d[4] = byte(f.target.obj)
+	binary.LittleEndian.PutUint16(d[2:], uint16(f.Src))
+	d[4] = byte(f.Target.Obj)
 	n := 5
-	if f.target.off > 0x7fff {
+	if f.Target.Off > 0x7fff {
 		flags |= 0x10
-		binary.LittleEndian.PutUint32(d[n:], uint32(f.target.off))
+		binary.LittleEndian.PutUint32(d[n:], uint32(f.Target.Off))
 		n += 4
 	} else {
-		binary.LittleEndian.PutUint16(d[n:], uint16(f.target.off))
+		binary.LittleEndian.PutUint16(d[n:], uint16(f.Target.Off))
 		n += 2
 	}
 	d[1] = flags
@@ -66,7 +66,7 @@ type fixupdata struct {
 
 // write writes out fixup records. Returns fixup record indexes for each page in
 // the object, truncated to exclude trailing zeroes.
-func (d *fixupdata) write(size uint32, fixups []fixup) []uint32 {
+func (d *fixupdata) write(size uint32, fixups []Fixup) []uint32 {
 	if size == 0 {
 		return nil
 	}
@@ -75,7 +75,7 @@ func (d *fixupdata) write(size uint32, fixups []fixup) []uint32 {
 	// Find the number of pages that include all fixups.
 	var maxOff int32 = -1
 	for _, f := range fixups {
-		off := f.src + 3
+		off := f.Src + 3
 		if off > maxOff {
 			maxOff = off
 		}
@@ -92,7 +92,7 @@ func (d *fixupdata) write(size uint32, fixups []fixup) []uint32 {
 	for _, f := range fixups {
 		var last int32 = -1
 		for off := int32(0); off < 3; off += 3 {
-			pi := (f.src + off) >> pageBits
+			pi := (f.Src + off) >> pageBits
 			if pi > last && pi < npage {
 				idxs[pi]++
 			}
@@ -104,11 +104,11 @@ func (d *fixupdata) write(size uint32, fixups []fixup) []uint32 {
 		idxs[i] = total
 		total += n
 	}
-	assigned := make([]fixup, total)
+	assigned := make([]Fixup, total)
 	for _, f := range fixups {
 		var last int32 = -1
 		for off := int32(0); off < 4; off += 4 {
-			pi := (f.src + off) >> pageBits
+			pi := (f.Src + off) >> pageBits
 			if pi > last && pi < npage {
 				idx := idxs[pi]
 				idxs[pi] = idx + 1
@@ -133,7 +133,7 @@ func (d *fixupdata) write(size uint32, fixups []fixup) []uint32 {
 		pos = idx
 		base := int32(pi << pageBits)
 		for _, f := range pfixups {
-			f.src -= base
+			f.Src -= base
 			records = appendFixup(f, records)
 		}
 		var roff [4]byte
@@ -181,13 +181,13 @@ func (w *datawriter) write(d []byte) {
 
 // =================================================================================================
 
-func (p *program) dumpBlocks() [][]byte {
+func (p *Program) dumpBlocks() [][]byte {
 	var objdata objdata
 	var fixupdata fixupdata
 	var pagedata pagedata
-	for _, obj := range p.objects {
-		first, count := pagedata.write(obj.data)
-		fixup := fixupdata.write(obj.size, obj.fixups)
+	for _, obj := range p.Objects {
+		first, count := pagedata.write(obj.Data)
+		fixup := fixupdata.write(obj.Size, obj.Fixups)
 		objdata.write(obj, fixup, first, count)
 	}
 	var h [0xac]byte
@@ -196,13 +196,13 @@ func (p *program) dumpBlocks() [][]byte {
 	h[1] = 'E'
 	le.PutUint16(h[0x08:], 2)                      // 386 or higher
 	le.PutUint32(h[0x14:], pagedata.count)         // number of pages
-	le.PutUint32(h[0x18:], uint32(p.entry.obj))    // EIP object number
-	le.PutUint32(h[0x1c:], uint32(p.entry.off))    // EIP offset
-	le.PutUint32(h[0x20:], uint32(p.stack.obj))    // ESP object number
-	le.PutUint32(h[0x24:], uint32(p.stack.off))    // ESP address
+	le.PutUint32(h[0x18:], uint32(p.Entry.Obj))    // EIP object number
+	le.PutUint32(h[0x1c:], uint32(p.Entry.Off))    // EIP offset
+	le.PutUint32(h[0x20:], uint32(p.Stack.Obj))    // ESP object number
+	le.PutUint32(h[0x24:], uint32(p.Stack.Off))    // ESP address
 	le.PutUint32(h[0x28:], pageSize)               // Page size, 4 KiB
 	le.PutUint32(h[0x2c:], pagedata.offset)        // Bytes on last page
-	le.PutUint32(h[0x44:], uint32(len(p.objects))) // Number of objects
+	le.PutUint32(h[0x44:], uint32(len(p.Objects))) // Number of objects
 
 	var d datawriter
 	d.write(h[:])
@@ -225,11 +225,15 @@ func (p *program) dumpBlocks() [][]byte {
 	return d.data
 }
 
-func (p *program) writeTo(w io.Writer) error {
+// WriteTo writes the program to a writer.
+func (p *Program) WriteTo(w io.Writer) (int64, error) {
+	var amt int64
 	for _, d := range p.dumpBlocks() {
-		if _, err := w.Write(d); err != nil {
-			return err
+		n, err := w.Write(d)
+		amt += int64(n)
+		if err != nil {
+			return amt, err
 		}
 	}
-	return nil
+	return amt, nil
 }

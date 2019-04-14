@@ -7,6 +7,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+
+	"moria.us/elf2dos/module"
 )
 
 // A wrappedError is an error wrapped with a location for context.
@@ -79,15 +81,15 @@ type segment struct {
 	addrRange
 	index  int
 	prog   *elf.Prog
-	object *object
+	object *module.Object
 }
 
 // resolveAddr resolves an ELF address as an LE/LX object reference.
-func resolveAddr(segs []segment, addr uint32) (r ref) {
+func resolveAddr(segs []segment, addr uint32) (r module.Ref) {
 	for i, s := range segs {
 		if s.hasAddr(addr) {
-			r.obj = int32(i + 1)
-			r.off = int32(addr - s.addr)
+			r.Obj = int32(i + 1)
+			r.Off = int32(addr - s.addr)
 			break
 		}
 	}
@@ -97,22 +99,22 @@ func resolveAddr(segs []segment, addr uint32) (r ref) {
 // A symbol is the resolution of an ELF symbol to an LE/LX reference.
 type symbol struct {
 	addr uint32
-	ref
+	module.Ref
 	name string
 }
 
 // readLoadSegment reads a PT_LOAD segment and returns the assigned LE/LX
 // object.
 func readLoadSegment(i int, p *elf.Prog) (seg segment, err error) {
-	flags := obj32Bit
+	flags := module.Obj32Bit
 	if p.Flags&elf.PF_X != 0 {
-		flags |= objX
+		flags |= module.ObjX
 	}
 	if p.Flags&elf.PF_W != 0 {
-		flags |= objW
+		flags |= module.ObjW
 	}
 	if p.Flags&elf.PF_R != 0 {
-		flags |= objR
+		flags |= module.ObjR
 	} else {
 		return segment{}, errors.New("segment is loadable but not readable, which is unsupported")
 	}
@@ -139,11 +141,11 @@ func readLoadSegment(i int, p *elf.Prog) (seg segment, err error) {
 		},
 		index: i,
 		prog:  p,
-		object: &object{
-			flags: flags,
-			size:  size,
-			addr:  addr,
-			data:  data,
+		object: &module.Object{
+			Flags: flags,
+			Size:  size,
+			Addr:  addr,
+			Data:  data,
 		},
 	}, nil
 }
@@ -181,7 +183,7 @@ func resolveSymbols(f *elf.File, segs []segment) ([]symbol, error) {
 	for i, sym := range syms {
 		osyms[i].addr = uint32(sym.Value)
 		osyms[i].name = sym.Name
-		osyms[i].ref = resolveAddr(segs, uint32(sym.Value))
+		osyms[i].Ref = resolveAddr(segs, uint32(sym.Value))
 	}
 	return osyms, nil
 }
@@ -209,37 +211,37 @@ func addRelocation(rel elf.Rel32, segs []segment, syms []symbol) error {
 		return fmt.Errorf("symbol reference %d out of bounds", rsym)
 	}
 	sym := syms[rsym-1]
-	if sym.obj == 0 {
+	if sym.Obj == 0 {
 		return fmt.Errorf("unresolved symbol %q (symbol %d)", sym.name, rsym)
 	}
 	// Get the current value stored in the relocation. Note that the value here
 	// is after the relocations are applied by the ELF linker.
 	obj := seg.object
 	srcOff := int32(rel.Off - seg.addr)
-	val := binary.LittleEndian.Uint32(obj.data[srcOff:])
-	var srcType srcType
+	val := binary.LittleEndian.Uint32(obj.Data[srcOff:])
+	var srcType module.SrcType
 	var fixOff int32
 	switch rtype := elf.R_386(rel.Info & 0xff); rtype {
 	case elf.R_386_32:
-		srcType = srcOffset32
-		fixOff = sym.off + int32(val-sym.addr)
+		srcType = module.SrcOffset32
+		fixOff = sym.Off + int32(val-sym.addr)
 	case elf.R_386_PC32:
-		if sym.obj == srcObj {
+		if sym.Obj == srcObj {
 			// Note that: srcOff+int32(val)+4 == fixOff
 			// Relative fixups within an object are not necessary.
 			return nil
 		}
-		srcType = srcRelative32
-		fixOff = sym.off + int32(val+rel.Off+4-sym.addr)
+		srcType = module.SrcRelative32
+		fixOff = sym.Off + int32(val+rel.Off+4-sym.addr)
 	default:
 		return fmt.Errorf("unsupported relocation type %s", rtype)
 	}
-	obj.fixups = append(obj.fixups, fixup{
-		srcType: srcType,
-		src:     srcOff,
-		target: ref{
-			obj: sym.obj,
-			off: fixOff,
+	obj.Fixups = append(obj.Fixups, module.Fixup{
+		SrcType: srcType,
+		Src:     srcOff,
+		Target: module.Ref{
+			Obj: sym.Obj,
+			Off: fixOff,
 		},
 	})
 	return nil
@@ -291,7 +293,7 @@ func readSections(f *elf.File, segs []segment, syms []symbol) error {
 }
 
 // readExecutable reads an ELF executable and returns an LE/LX program.
-func readExecutable(name string) (*program, error) {
+func readExecutable(name string) (*module.Program, error) {
 	f, err := elf.Open(name)
 	if err != nil {
 		return nil, err
@@ -314,32 +316,32 @@ func readExecutable(name string) (*program, error) {
 		return nil, err
 	}
 	entry := resolveAddr(segs, uint32(f.Entry))
-	if entry.obj == 0 {
+	if entry.Obj == 0 {
 		return nil, fmt.Errorf("could not resolve entry point 0x%0x", f.Entry)
 	}
 	syms, err := resolveSymbols(f, segs)
 	if err != nil {
 		return nil, err
 	}
-	var stack ref
+	var stack module.Ref
 	for _, sym := range syms {
 		if sym.name == "_stack_end" {
-			stack = sym.ref
+			stack = sym.Ref
 		}
 	}
-	if stack.obj == 0 {
+	if stack.Obj == 0 {
 		return nil, errors.New("could not find _stack_end")
 	}
 	if err := readSections(f, segs, syms); err != nil {
 		return nil, err
 	}
-	var objs []*object
+	var objs []*module.Object
 	for _, seg := range segs {
 		objs = append(objs, seg.object)
 	}
-	return &program{
-		entry:   entry,
-		stack:   stack,
-		objects: objs,
+	return &module.Program{
+		Entry:   entry,
+		Stack:   stack,
+		Objects: objs,
 	}, nil
 }

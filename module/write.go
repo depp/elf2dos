@@ -225,15 +225,12 @@ func (p *Program) dumpBlocks() [][]byte {
 	return d.data
 }
 
-// WriteTo writes the program to a writer.
-func (p *Program) WriteTo(w io.Writer) (int64, error) {
-	var amt int64
+// Write writes the program, in LE format.
+func (p *Program) Write(w io.Writer) error {
 	for _, d := range p.dumpBlocks() {
-		n, err := w.Write(d)
-		amt += int64(n)
-		if err != nil {
-			return amt, err
+		if _, err := w.Write(d); err != nil {
+			return err
 		}
 	}
-	return amt, nil
+	return nil
 }

@@ -49,6 +49,54 @@ type Ref struct {
 	Off int32 // offset within target
 }
 
+// A ProgramHeader is the header for an LE/LX format executable.
+type ProgramHeader struct {
+	Signature                 [2]byte // "LE" or "LX"
+	ByteOrder                 uint8
+	WordOrder                 uint8
+	FormatLevel               uint32
+	CPUType                   uint16 // Minimum CPU type supported
+	OSType                    uint16 // OS type supported
+	ModuleVersion             uint32 // Version of this module
+	ModuleFlags               uint32
+	ModuleNumPages            uint32
+	EIP                       Ref    // Initial value of EIP
+	ESP                       Ref    // Initial value of ESP
+	PageSize                  uint32 // Size of data pages
+	LastPageSize              uint32 // Size of last page
+	FixupSectionSize          uint32 // Size of fixup section
+	FixupSectionChecksum      uint32 // Checksum of fixup section, or 0
+	LoaderSectionSize         uint32 // Size of loader section
+	LoaderSectionChecksum     uint32 // Checksum of loader section, or 0
+	ObjectTableOffset         uint32 // Offset of object table, from header
+	NumObjects                uint32 // Number of objects in the module
+	ObjectPageTableOffset     uint32 // Object page table offset, from header
+	ObjectIterPageTableOffset uint32 // Object iterated page table offset, from header
+	ResourceTableOffset       uint32
+	NumResourceTableEntries   uint32
+	ResidentNameTableOffset   uint32
+	EntryTableOffset          uint32
+	ModuleDirectivesOffset    uint32
+	NumModuleDirectives       uint32
+	FixupPageTableOffset      uint32 // Fixup page table offset, from header
+	FixupRecordOffset         uint32 // Fixup record offset, from header
+	ImportModuleTableOffset   uint32 // Import module table offset, from header
+	ImportModuleEntryCount    uint32 // Number of import module entries
+	ImportProcTableOffset     uint32
+	PerPageChecksumOffset     uint32
+	DataPagesOffset           uint32 // Data pages offset, from header
+	NumPreloadPages           uint32
+	NonResNameTableOffset     uint32
+	NonResNameTableLength     uint32
+	NonResNameTableChecksum   uint32
+	AutoDSObject              uint32
+	DebugInfoOffset           uint32
+	DebugInfoLength           uint32
+	NumInstancePreload        uint32
+	NumInstanceDemand         uint32
+	HeapSize                  uint32
+}
+
 // A Program is an LE/LX format executable.
 type Program struct {
 	Entry   Ref       // initial value of EIP

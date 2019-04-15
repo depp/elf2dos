@@ -1,4 +1,5 @@
-package main
+// Package elf converts ELF programs to LE/LX programs.
+package elf
 
 import (
 	"bytes"
@@ -294,8 +295,8 @@ func readSections(f *elf.File, segs []segment, syms []symbol) error {
 	return nil
 }
 
-// readExecutable reads an ELF executable and returns an LE/LX program.
-func readExecutable(name string) (*module.Program, error) {
+// Convert reads an ELF executable and returns an LE/LX program.
+func ConvertToLELX(name string) (*module.Program, error) {
 	f, err := elf.Open(name)
 	if err != nil {
 		return nil, err

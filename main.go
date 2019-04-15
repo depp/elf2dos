@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 
+	"moria.us/elf2dos/elf"
 	"moria.us/elf2dos/module"
 )
 
@@ -24,9 +25,9 @@ func cmdObjDump(input string) error {
 }
 
 func cmdConvert(input, output string) error {
-	prog, err := readExecutable(input)
+	prog, err := elf.ConvertToLELX(input)
 	if err != nil {
-		return wrapError(err, input)
+		return fmt.Errorf("%s: %v", input, err)
 	}
 	fp, err := os.Create(output)
 	if err != nil {

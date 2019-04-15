@@ -2,8 +2,11 @@ package module
 
 import (
 	"bufio"
+	"fmt"
 	"strconv"
 )
+
+const indentLevel = "  "
 
 const hexDigits = "0123456789abcdef"
 
@@ -63,11 +66,15 @@ func osType(v uint16) string {
 	}
 }
 
-func writeInt(w *bufio.Writer, v uint32, sz uint) {
-	w.WriteString("0x")
+func writeInt0(w *bufio.Writer, v uint32, sz uint) {
 	for i := uint(sz * 2); i > 0; i-- {
 		w.WriteByte(hexDigits[(v>>((i-1)*4))&15])
 	}
+}
+
+func writeInt(w *bufio.Writer, v uint32, sz uint) {
+	w.WriteString("0x")
+	writeInt0(w, v, sz)
 }
 
 type field struct {
@@ -80,8 +87,10 @@ func dumpFields(w *bufio.Writer, prefix string, fields []field) {
 	if len(fields) == 0 {
 		return
 	}
-	var minName int = int(^uint(0) >> 1)
-	var maxName int
+	var (
+		minName = int(^uint(0) >> 1)
+		maxName int
+	)
 	for _, f := range fields {
 		if len(f.name) > maxName {
 			maxName = len(f.name)
@@ -130,9 +139,89 @@ func (h *ObjectHeader) DumpText(w *bufio.Writer, prefix string) {
 		{"Base Address", h.BaseAddress, ""},
 		{"Flags", uint32(h.Flags), ""},
 		{"Page Table Index", h.PageTableIndex, ""},
-		{"Page Table Entries", h.PageTableEntries, ""},
+		{"Page Table Entries", h.NumPageTableEntries, ""},
 		{"Reserved", h.Reserved, ""},
 	})
+}
+
+func writeFixup(w *bufio.Writer, f Fixup) {
+	writeInt0(w, uint32(f.SrcType), 1)
+	w.WriteByte(':')
+	if f.SrcType&0x20 != 0 {
+		w.WriteByte('L')
+	} else {
+		w.WriteByte('-')
+	}
+	if f.SrcType&0x10 != 0 {
+		w.WriteByte('A')
+	} else {
+		w.WriteByte('-')
+	}
+	var t string
+	switch f.SrcType & 15 {
+	case 0:
+		t = "ab" // byte
+	case 2:
+		t = "sw" // selector word
+	case 3:
+		t = "fw" // far word
+	case 5:
+		t = "aw" // absolute word
+	case 6:
+		t = "fd" // far doubleword
+	case 7:
+		t = "ad" // absolute doubleword
+	case 8:
+		t = "rd" // relative doubleword
+	default:
+		t = "??"
+	}
+	w.WriteString(t)
+
+	w.WriteByte(' ')
+	if f.Src >= 0 {
+		w.WriteByte('+')
+		writeInt(w, uint32(f.Src), 2)
+	} else {
+		w.WriteByte('-')
+		writeInt(w, uint32(-f.Src), 2)
+	}
+
+	w.WriteByte(' ')
+	if f.Target.Obj > 0xff {
+		writeInt0(w, uint32(f.Target.Obj), 2)
+	} else {
+		writeInt0(w, uint32(f.Target.Obj), 1)
+	}
+	w.WriteByte(':')
+	if f.Target.Off > 0xffff {
+		writeInt0(w, uint32(f.Target.Off), 4)
+	} else {
+		writeInt0(w, uint32(f.Target.Off), 2)
+	}
+}
+
+// DumpText writes the object, in text format, to the writer
+func (o *Object) DumpText(w *bufio.Writer, prefix string) {
+	nprefix3 := prefix + indentLevel + indentLevel + indentLevel
+	nprefix2 := nprefix3[:len(prefix)+len(indentLevel)*2]
+	nprefix1 := nprefix3[:len(prefix)+len(indentLevel)]
+	w.WriteString(prefix)
+	w.WriteString("Header:\n")
+	o.ObjectHeader.DumpText(w, nprefix1)
+	if len(o.Pages) != 0 {
+		w.WriteString(nprefix1)
+		w.WriteString("Pages:\n")
+		for i, p := range o.Pages {
+			fmt.Fprintf(w, "%sPage %d, Fixup Page %d (Reserved: 0x%02x 0x%02x)\n",
+				nprefix2, i, p.FixupPageIndex, p.Reserved1, p.Reserved2)
+			for _, f := range p.Fixups {
+				w.WriteString(nprefix3)
+				writeFixup(w, f)
+				w.WriteByte('\n')
+			}
+		}
+	}
 }
 
 // DumpText writes the program header, in text format, to the writer.
@@ -187,7 +276,7 @@ func (p *ProgramHeader) DumpText(w *bufio.Writer, prefix string) {
 
 // DumpText writes the program, in text format, to the writer.
 func (p *Program) DumpText(w *bufio.Writer, prefix string) {
-	nprefix := prefix + "    "
+	nprefix := prefix + indentLevel
 	w.WriteString(prefix)
 	w.WriteString("Header:\n")
 	p.ProgramHeader.DumpText(w, nprefix)

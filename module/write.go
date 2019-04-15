@@ -5,16 +5,7 @@ import (
 	"io"
 )
 
-const (
-	pageBits = 12
-	pageSize = 1 << pageBits
-)
-
-var zeropage [pageSize]byte
-
-func pagecount(size uint32) uint32 {
-	return (size + pageSize - 1) >> pageBits
-}
+var zeropage [PageSize]byte
 
 // =================================================================================================
 
@@ -83,7 +74,7 @@ func (d *fixupdata) write(size uint32, fixups []Fixup) []uint32 {
 	if maxOff < 0 {
 		return nil
 	}
-	if n := (maxOff >> pageBits) + 1; n > npage {
+	if n := (maxOff >> PageBits) + 1; n > npage {
 		npage = n
 	}
 
@@ -92,7 +83,7 @@ func (d *fixupdata) write(size uint32, fixups []Fixup) []uint32 {
 	for _, f := range fixups {
 		var last int32 = -1
 		for off := int32(0); off < 3; off += 3 {
-			pi := (f.Src + off) >> pageBits
+			pi := (f.Src + off) >> PageBits
 			if pi > last && pi < npage {
 				idxs[pi]++
 			}
@@ -108,7 +99,7 @@ func (d *fixupdata) write(size uint32, fixups []Fixup) []uint32 {
 	for _, f := range fixups {
 		var last int32 = -1
 		for off := int32(0); off < 4; off += 4 {
-			pi := (f.Src + off) >> pageBits
+			pi := (f.Src + off) >> PageBits
 			if pi > last && pi < npage {
 				idx := idxs[pi]
 				idxs[pi] = idx + 1
@@ -131,7 +122,7 @@ func (d *fixupdata) write(size uint32, fixups []Fixup) []uint32 {
 		idxs[pi] = uint32(len(pages) / 4)
 		pfixups := assigned[pos:idx]
 		pos = idx
-		base := int32(pi << pageBits)
+		base := int32(pi << PageBits)
 		for _, f := range pfixups {
 			f.Src -= base
 			records = appendFixup(f, records)
@@ -161,7 +152,7 @@ func (d *pagedata) write(data []byte) (first, count uint32) {
 			d.data = append(d.data, zeropage[d.offset:])
 		}
 		d.data = append(d.data, data)
-		d.offset = uint32(len(data)) & (pageSize - 1)
+		d.offset = uint32(len(data)) & (PageSize - 1)
 		d.count += count
 	}
 	return
@@ -200,7 +191,7 @@ func (p *Program) dumpBlocks() [][]byte {
 	le.PutUint32(h[0x1c:], uint32(p.EIP.Off))      // EIP offset
 	le.PutUint32(h[0x20:], uint32(p.ESP.Obj))      // ESP object number
 	le.PutUint32(h[0x24:], uint32(p.ESP.Off))      // ESP address
-	le.PutUint32(h[0x28:], pageSize)               // Page size, 4 KiB
+	le.PutUint32(h[0x28:], PageSize)               // Page size, 4 KiB
 	le.PutUint32(h[0x2c:], pagedata.offset)        // Bytes on last page
 	le.PutUint32(h[0x44:], uint32(len(p.Objects))) // Number of objects
 

@@ -1,6 +1,22 @@
 // Package module provides an interface to LE linear executable modules.
 package module
 
+const (
+	// PageBits is the amount of shift to convert between bytes and pages.
+	PageBits = 12
+	// PageSize is the number of bytes in a page.
+	PageSize = 1 << PageBits
+)
+
+// pagecount returns the smallest number of pages that contain the given number of bytes.
+func pagecount(size uint32) uint32 {
+	npage := size >> PageBits
+	if size&(PageSize-1) != 0 {
+		npage++
+	}
+	return npage
+}
+
 // An ObjFlag is a set of flags for an object in an LE/LX executable.
 type ObjFlag uint32
 
@@ -37,17 +53,31 @@ type Fixup struct {
 // An ObjectHeader is the header for a loadable object in an LE/LX format
 // executable.
 type ObjectHeader struct {
-	VirtualSize      uint32 // Size, in memory, in bytes
-	BaseAddress      uint32 // Base address where the data assumes the region is loaded
-	Flags            ObjFlag
-	PageTableIndex   uint32 // 1-based offset into object page table
-	PageTableEntries uint32 // Number of page table entries
-	Reserved         uint32
+	VirtualSize         uint32 // Size, in memory, in bytes
+	BaseAddress         uint32 // Base address where the data assumes the region is loaded
+	Flags               ObjFlag
+	PageTableIndex      uint32 // 1-based offset into object page table
+	NumPageTableEntries uint32 // Number of page table entries
+	Reserved            uint32
+}
+
+// An ObjectPageHeader is an entry in the object page table.
+type ObjectPageHeader struct {
+	Reserved1      uint8
+	FixupPageIndex uint16
+	Reserved2      uint8
+}
+
+// An ObjectPage is an entry in the object page table and its fixups.
+type ObjectPage struct {
+	ObjectPageHeader
+	Fixups []Fixup
 }
 
 // An Object is a region of memory to be loaded when the program is run.
 type Object struct {
 	ObjectHeader
+	Pages  []*ObjectPage
 	Data   []byte  // data, length may be smaller than region size
 	Fixups []Fixup // list of fixups to apply to data after loading
 }
@@ -111,7 +141,7 @@ func (p *ProgramHeader) IsLE() bool {
 	return p.Signature[0] == 'L' && p.Signature[1] == 'E'
 }
 
-// IsLE returns true if the program header is for an LX executable.
+// IsLX returns true if the program header is for an LX executable.
 func (p *ProgramHeader) IsLX() bool {
 	return p.Signature[0] == 'L' && p.Signature[1] == 'X'
 }

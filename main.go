@@ -52,15 +52,14 @@ func mainE() error {
 			return fmt.Errorf("got %d arguments, expected 1", len(args))
 		}
 		return cmdObjDump(args[0])
-	} else {
-		if len(args) != 1 {
-			return fmt.Errorf("got %d arguments, expected 1", len(args))
-		}
-		if output == "" {
-			return errors.New("flag -output is required")
-		}
-		return cmdConvert(args[0], output)
 	}
+	if len(args) != 1 {
+		return fmt.Errorf("got %d arguments, expected 1", len(args))
+	}
+	if output == "" {
+		return errors.New("flag -output is required")
+	}
+	return cmdConvert(args[0], output)
 }
 
 func main() {

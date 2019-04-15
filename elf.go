@@ -142,10 +142,12 @@ func readLoadSegment(i int, p *elf.Prog) (seg segment, err error) {
 		index: i,
 		prog:  p,
 		object: &module.Object{
-			Flags: flags,
-			Size:  size,
-			Addr:  addr,
-			Data:  data,
+			ObjectHeader: module.ObjectHeader{
+				VirtualSize: size,
+				BaseAddress: addr,
+				Flags:       flags,
+			},
+			Data: data,
 		},
 	}, nil
 }
@@ -340,8 +342,10 @@ func readExecutable(name string) (*module.Program, error) {
 		objs = append(objs, seg.object)
 	}
 	return &module.Program{
-		Entry:   entry,
-		Stack:   stack,
+		ProgramHeader: module.ProgramHeader{
+			EIP: entry,
+			ESP: stack,
+		},
 		Objects: objs,
 	}, nil
 }

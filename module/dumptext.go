@@ -2,6 +2,7 @@ package module
 
 import (
 	"bufio"
+	"strconv"
 )
 
 const hexDigits = "0123456789abcdef"
@@ -112,7 +113,7 @@ func dumpFields(w *bufio.Writer, prefix string, fields []field) {
 			w.WriteByte(':')
 			writeInt(w, uint32(v.Off), 4)
 		default:
-			panic("unknown field type")
+			panic("unknown field type for " + f.name)
 		}
 		if f.hint != "" {
 			w.WriteString("  ")
@@ -120,6 +121,18 @@ func dumpFields(w *bufio.Writer, prefix string, fields []field) {
 		}
 		w.WriteByte('\n')
 	}
+}
+
+// DumpText writes the object header, in text format, to the writer.
+func (h *ObjectHeader) DumpText(w *bufio.Writer, prefix string) {
+	dumpFields(w, prefix, []field{
+		{"Virtual Size", h.VirtualSize, ""},
+		{"Base Address", h.BaseAddress, ""},
+		{"Flags", uint32(h.Flags), ""},
+		{"Page Table Index", h.PageTableIndex, ""},
+		{"Page Table Entries", h.PageTableEntries, ""},
+		{"Reserved", h.Reserved, ""},
+	})
 }
 
 // DumpText writes the program header, in text format, to the writer.
@@ -170,4 +183,21 @@ func (p *ProgramHeader) DumpText(w *bufio.Writer, prefix string) {
 		{"Num Instance Demand", p.NumInstanceDemand, ""},
 		{"Heap Size", p.HeapSize, ""},
 	})
+}
+
+// DumpText writes the program, in text format, to the writer.
+func (p *Program) DumpText(w *bufio.Writer, prefix string) {
+	nprefix := prefix + "    "
+	w.WriteString(prefix)
+	w.WriteString("Header:\n")
+	p.ProgramHeader.DumpText(w, nprefix)
+	w.WriteByte('\n')
+	for i, obj := range p.Objects {
+		w.WriteString(prefix)
+		w.WriteString("Object ")
+		w.WriteString(strconv.Itoa(i + 1))
+		w.WriteString(":\n")
+		obj.DumpText(w, nprefix)
+		w.WriteByte('\n')
+	}
 }

@@ -25,8 +25,8 @@ type objdata struct {
 
 func (d *objdata) write(obj *Object, fixup []uint32, first, count uint32) {
 	var od [4 * 6]byte
-	binary.LittleEndian.PutUint32(od[:], obj.Size)
-	binary.LittleEndian.PutUint32(od[4:], obj.Addr)
+	binary.LittleEndian.PutUint32(od[:], obj.VirtualSize)
+	binary.LittleEndian.PutUint32(od[4:], obj.BaseAddress)
 	binary.LittleEndian.PutUint32(od[8:], uint32(obj.Flags))
 	if len(fixup) != 0 {
 		binary.LittleEndian.PutUint32(od[12:], uint32(len(d.page)/4)+1)
@@ -187,7 +187,7 @@ func (p *Program) dumpBlocks() [][]byte {
 	var pagedata pagedata
 	for _, obj := range p.Objects {
 		first, count := pagedata.write(obj.Data)
-		fixup := fixupdata.write(obj.Size, obj.Fixups)
+		fixup := fixupdata.write(obj.VirtualSize, obj.Fixups)
 		objdata.write(obj, fixup, first, count)
 	}
 	var h [0xac]byte
@@ -196,10 +196,10 @@ func (p *Program) dumpBlocks() [][]byte {
 	h[1] = 'E'
 	le.PutUint16(h[0x08:], 2)                      // 386 or higher
 	le.PutUint32(h[0x14:], pagedata.count)         // number of pages
-	le.PutUint32(h[0x18:], uint32(p.Entry.Obj))    // EIP object number
-	le.PutUint32(h[0x1c:], uint32(p.Entry.Off))    // EIP offset
-	le.PutUint32(h[0x20:], uint32(p.Stack.Obj))    // ESP object number
-	le.PutUint32(h[0x24:], uint32(p.Stack.Off))    // ESP address
+	le.PutUint32(h[0x18:], uint32(p.EIP.Obj))      // EIP object number
+	le.PutUint32(h[0x1c:], uint32(p.EIP.Off))      // EIP offset
+	le.PutUint32(h[0x20:], uint32(p.ESP.Obj))      // ESP object number
+	le.PutUint32(h[0x24:], uint32(p.ESP.Off))      // ESP address
 	le.PutUint32(h[0x28:], pageSize)               // Page size, 4 KiB
 	le.PutUint32(h[0x2c:], pagedata.offset)        // Bytes on last page
 	le.PutUint32(h[0x44:], uint32(len(p.Objects))) // Number of objects

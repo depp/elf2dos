@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"encoding/binary"
 	"errors"
 	"flag"
 	"fmt"
@@ -12,19 +11,12 @@ import (
 )
 
 func cmdObjDump(input string) error {
-	fp, err := os.Open(input)
+	p, err := module.Open(input)
 	if err != nil {
 		return err
 	}
-	defer fp.Close()
-	r := bufio.NewReader(fp)
-	var h module.ProgramHeader
-	if err := binary.Read(r, binary.LittleEndian, &h); err != nil {
-		return err
-	}
 	w := bufio.NewWriter(os.Stdout)
-	w.WriteString("Header:\n")
-	h.DumpText(w, "    ")
+	p.DumpText(w, "")
 	if err := w.Flush(); err != nil {
 		return err
 	}

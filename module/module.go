@@ -34,11 +34,20 @@ type Fixup struct {
 	Add     int32   // value to add to offset
 }
 
+// An ObjectHeader is the header for a loadable object in an LE/LX format
+// executable.
+type ObjectHeader struct {
+	VirtualSize      uint32 // Size, in memory, in bytes
+	BaseAddress      uint32 // Base address where the data assumes the region is loaded
+	Flags            ObjFlag
+	PageTableIndex   uint32 // 1-based offset into object page table
+	PageTableEntries uint32 // Number of page table entries
+	Reserved         uint32
+}
+
 // An Object is a region of memory to be loaded when the program is run.
 type Object struct {
-	Flags  ObjFlag // object flags and permissions
-	Size   uint32  // size of the region, in memory
-	Addr   uint32  // base address where the data assumes the region is loaded
+	ObjectHeader
 	Data   []byte  // data, length may be smaller than region size
 	Fixups []Fixup // list of fixups to apply to data after loading
 }
@@ -97,9 +106,18 @@ type ProgramHeader struct {
 	HeapSize                  uint32
 }
 
+// IsLE returns true if the program header is for an LE executable.
+func (p *ProgramHeader) IsLE() bool {
+	return p.Signature[0] == 'L' && p.Signature[1] == 'E'
+}
+
+// IsLE returns true if the program header is for an LX executable.
+func (p *ProgramHeader) IsLX() bool {
+	return p.Signature[0] == 'L' && p.Signature[1] == 'X'
+}
+
 // A Program is an LE/LX format executable.
 type Program struct {
-	Entry   Ref       // initial value of EIP
-	Stack   Ref       // initial value of ESP
+	ProgramHeader
 	Objects []*Object // objects to load
 }

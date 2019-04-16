@@ -12,6 +12,9 @@ import (
 	"moria.us/elf2dos/module"
 )
 
+// objAbsolute is a placeholder object for absolute symbols.
+const objAbsolute int32 = int32(^uint32(0) >> 1)
+
 // A wrappedError is an error wrapped with a location for context.
 type wrappedError struct {
 	location string
@@ -178,6 +181,19 @@ func assignSegments(f *elf.File) ([]segment, error) {
 // resolveSymbols resolves each symbol in an ELF file to an LE/LX object
 // reference.
 func resolveSymbols(f *elf.File, segs []segment) ([]symbol, error) {
+	// Map sections to objects.
+	secObjects := make([]int, len(f.Sections))
+	for i, s := range f.Sections {
+		offset := uint32(s.Addr)
+		obj := -1
+		for _, seg := range segs {
+			if seg.addr <= offset && offset < seg.addr+seg.size {
+				obj = seg.index
+				break
+			}
+		}
+		secObjects[i] = obj
+	}
 	syms, err := f.Symbols()
 	if err != nil {
 		return nil, err
@@ -186,7 +202,19 @@ func resolveSymbols(f *elf.File, segs []segment) ([]symbol, error) {
 	for i, sym := range syms {
 		osyms[i].addr = uint32(sym.Value)
 		osyms[i].name = sym.Name
-		osyms[i].Ref = resolveAddr(segs, uint32(sym.Value))
+		// Find the object using the symbol's section.
+		if 0 <= sym.Section && int(sym.Section) < len(secObjects) {
+			obj := secObjects[sym.Section]
+			seg := segs[obj]
+			osyms[i].Ref = module.Ref{
+				Obj: int32(obj + 1),
+				Off: int32(uint32(sym.Value) - seg.addr),
+			}
+		} else if sym.Section == elf.SHN_ABS {
+			osyms[i].Ref.Obj = objAbsolute
+		} else {
+			return nil, fmt.Errorf("symbol has invalid section %d", sym.Section)
+		}
 	}
 	return osyms, nil
 }
@@ -216,6 +244,9 @@ func addRelocation(rel elf.Rel32, segs []segment, syms []symbol) error {
 	sym := syms[rsym-1]
 	if sym.Obj == 0 {
 		return fmt.Errorf("unresolved symbol %q (symbol %d)", sym.name, rsym)
+	}
+	if sym.Obj == objAbsolute {
+		return nil
 	}
 	// Get the current value stored in the relocation. Note that the value here
 	// is after the relocations are applied by the ELF linker.

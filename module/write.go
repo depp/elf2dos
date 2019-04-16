@@ -38,7 +38,7 @@ func appendFixup(f Fixup, data []byte) []byte {
 	binary.LittleEndian.PutUint16(d[2:], uint16(f.Src))
 	d[4] = byte(f.Target.Obj)
 	n := 5
-	if f.Target.Off > 0x7fff {
+	if f.Target.Off > 0x7fff || f.Target.Off < 0 {
 		flags |= 0x10
 		binary.LittleEndian.PutUint32(d[n:], uint32(f.Target.Off))
 		n += 4

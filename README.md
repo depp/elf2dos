@@ -10,7 +10,9 @@ This is a horribly ill-advised way to write code and it will surely erode your s
 
 [dos32a]: http://dos32a.narechk.net/index_en.html
 
-A demo of this and a blog post is forthcoming.
+An example “Hello, World!” program is available in the [examples](examples) directory.
+
+A blog post is forthcoming.
 
 ## Getting This to Work
 
@@ -37,8 +39,6 @@ A demo of this and a blog post is forthcoming.
 - DOS/32 Advanced by default uses 16-byte alignment. Don’t bother aligning anything to pages unless you change that.
 
 ## Future Work
-
-- Add example program and build system.
 
 - Combine executable with stub without having to run DOSBox.
 

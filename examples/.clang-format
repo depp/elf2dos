@@ -1,0 +1,22 @@
+---
+BasedOnStyle: Google
+AccessModifierOffset: -4
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortIfStatementsOnASingleLine: false
+AllowShortLoopsOnASingleLine: false
+DerivePointerAlignment: false
+IncludeBlocks: Preserve
+IncludeCategories:
+  - Regex:    '^".*'
+    Priority: 1
+  - Regex:    '^<.*\.h>'
+    Priority: 3
+  - Regex:    '^<.*'
+    Priority: 2
+IndentCaseLabels: false
+IndentWidth: 4
+PointerAlignment: Right
+SpacesBeforeTrailingComments: 1
+---
+Language: Proto
+IndentWidth: 2

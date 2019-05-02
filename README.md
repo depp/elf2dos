@@ -22,7 +22,7 @@ A blog post is forthcoming.
 
 - GCC will still emit calls to `memcpy`, `memmove`, `memset`, and `memcmp`, so you may need to define these.
 
-- A linker script is a good idea. This will be part of the forthcoming example.
+- A linker script is a good idea. An example is available in [examples/link.ld](examples/link.ld).
 
 - The `_stack_end` symbol defines the initial value of the stack pointer `esp`. This must be defined in the input. A natural way to do this is with a linker script,
 
